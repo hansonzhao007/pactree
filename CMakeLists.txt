@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.11)
-
-
-set(CMAKE_BUILD_TYPE Release)
-
 project(pactree)
 
-project(pactree)
+# build type
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE release)
+    message(STATUS "build type set to release")
+endif ()
+string(TOLOWER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE)
+message(STATUS "build type: ${CMAKE_BUILD_TYPE}")
 
 execute_process(COMMAND cat /proc/cpuinfo COMMAND grep clwb OUTPUT_VARIABLE CLWB)
 if(CLWB)
@@ -17,8 +19,10 @@ endif()
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "-pthread -Wall -Wextra -march=native -mavx512bw")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g")
+
+
+# all the binary will be in the build folder
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 enable_testing()

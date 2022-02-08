@@ -1,4 +1,3 @@
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 file(GLOB artsrc "*.cpp" "*.h")
 
 add_library(pdlart STATIC ${artsrc})

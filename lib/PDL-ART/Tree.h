@@ -4,115 +4,98 @@
 
 #ifndef ART_ROWEX_TREE_H
 #define ART_ROWEX_TREE_H
-#include "N.h"
-#include "Key.h"
 #include "Epoche.h"
-
+#include "Key.h"
+#include "N.h"
 
 using namespace ART;
 
 namespace ART_ROWEX {
 
-    class Tree {
-    public:
-        using LoadKeyFunction = void (*)(TID tid, Key &key);
-	uint64_t genId;
+class Tree {
+public:
+    using LoadKeyFunction = void (*) (TID tid, Key& key);
+    uint64_t genId;
 
-    private:
-        pptr<N> root;
-        //N *const root;
+private:
+    pptr<N> root;
+    // N *const root;
 
-   TID checkKey(const TID tid, const Key &k) const;
+    TID checkKey (const TID tid, const Key& k) const;
 
     LoadKeyFunction loadKey;
 
     Epoche epoche{256};
-	OpStruct oplogs[10000];
-	//OpStruct oplogs[10000000];
+    OpStruct oplogs[10000];
+    // OpStruct oplogs[10000000];
 
-//	OpStruct oplogs[100000];
-//	std::atomic<uint64_t> oplogsCount{0}; 
+    //	OpStruct oplogs[100000];
+    //	std::atomic<uint64_t> oplogsCount{0};
 
-	uint64_t oplogsCount;
+    uint64_t oplogsCount;
 
-//	static mappingTable mtable;
-    public:
-/*	void *operator new(size_t size){
-		return allocNVM(size);
-	}
+    //	static mappingTable mtable;
+public:
+    /*	void *operator new(size_t size){
+            return allocNVM(size);
+        }
 
-	void operator delete(void *ptr){
-		return freeNVM(ptr);
-	}*/
+        void operator delete(void *ptr){
+            return freeNVM(ptr);
+        }*/
 
+    enum class CheckPrefixResult : uint8_t { Match, NoMatch, OptimisticMatch };
 
+    enum class CheckPrefixPessimisticResult : uint8_t { Match, NoMatch, SkippedLevel };
 
-        enum class CheckPrefixResult : uint8_t {
-            Match,
-            NoMatch,
-            OptimisticMatch
-        };
+    enum class PCCompareResults : uint8_t { Smaller, Equal, Bigger, SkippedLevel };
+    enum class PCEqualsResults : uint8_t {
+        PartialMatch,
+        BothMatch,
+        Contained,
+        NoMatch,
+        SkippedLevel
+    };
+    static CheckPrefixResult checkPrefix (N* n, const Key& k, uint32_t& level);
 
-        enum class CheckPrefixPessimisticResult : uint8_t {
-            Match,
-            NoMatch,
-            SkippedLevel
-        };
+    static CheckPrefixPessimisticResult checkPrefixPessimistic (N* n, const Key& k, uint32_t& level,
+                                                                uint8_t& nonMatchingKey,
+                                                                Prefix& nonMatchingPrefix,
+                                                                LoadKeyFunction loadKey);
 
-        enum class PCCompareResults : uint8_t {
-            Smaller,
-            Equal,
-            Bigger,
-            SkippedLevel
-        };
-        enum class PCEqualsResults : uint8_t {
-            PartialMatch,
-            BothMatch,
-            Contained,
-            NoMatch,
-            SkippedLevel
-        };
-        static CheckPrefixResult checkPrefix(N* n, const Key &k, uint32_t &level);
+    static PCCompareResults checkPrefixCompare (const N* n, const Key& k, uint32_t& level,
+                                                LoadKeyFunction loadKey);
 
-        static CheckPrefixPessimisticResult checkPrefixPessimistic(N *n, const Key &k, uint32_t &level,
-                                                                   uint8_t &nonMatchingKey,
-                                                                   Prefix &nonMatchingPrefix,
-                                                                   LoadKeyFunction loadKey);
+    static PCEqualsResults checkPrefixEquals (const N* n, uint32_t& level, const Key& start,
+                                              const Key& end, LoadKeyFunction loadKey);
 
-        static PCCompareResults checkPrefixCompare(const N* n, const Key &k, uint32_t &level, LoadKeyFunction loadKey);
+public:
+    void recover ();
+    Tree (LoadKeyFunction loadKey);
 
-        static PCEqualsResults checkPrefixEquals(const N* n, uint32_t &level, const Key &start, const Key &end, LoadKeyFunction loadKey);
+    Tree (const Tree&) = delete;
 
-    public:
+    Tree (Tree&& t) : root (t.root), loadKey (t.loadKey) {}
 
-        void recover();
-        Tree(LoadKeyFunction loadKey);
+    ~Tree ();
 
-        Tree(const Tree &) = delete;
+    ThreadInfo getThreadInfo ();
 
-        Tree(Tree &&t) : root(t.root), loadKey(t.loadKey) { }
+    TID lookup (const Key& k, ThreadInfo& threadEpocheInfo) const;
 
-        ~Tree();
+    TID lookupNext (const Key& k, ThreadInfo& threadEpocheInfo) const;
 
-        ThreadInfo getThreadInfo() ;
-
-        TID lookup(const Key &k, ThreadInfo &threadEpocheInfo) const;
-
-        TID lookupNext(const Key &k, ThreadInfo &threadEpocheInfo) const;
-
-        void insert(const Key &k, TID tid, ThreadInfo &epocheInfo);
-        void remove(const Key &k, TID tid, ThreadInfo &epocheInfo);
+    void insert (const Key& k, TID tid, ThreadInfo& epocheInfo);
+    void remove (const Key& k, TID tid, ThreadInfo& epocheInfo);
 
 #ifdef SYNC
-		TID lookupNextwithLock(const Key &start, void** savenode, ThreadInfo &threadEpocheInfo) const;
-		bool nodeUnlock(void* savenode, ThreadInfo &threadEpocheInfo) const;
-		bool insert(const Key &k, TID tid, ThreadInfo &epocheInfo, void *locked_node);
+    TID lookupNextwithLock (const Key& start, void** savenode, ThreadInfo& threadEpocheInfo) const;
+    bool nodeUnlock (void* savenode, ThreadInfo& threadEpocheInfo) const;
+    bool insert (const Key& k, TID tid, ThreadInfo& epocheInfo, void* locked_node);
 #endif
 
+    bool isEmpty ();
+};
 
-
-        bool isEmpty();
-    };
-
-}
-#endif //ART_ROWEX_TREE_H
+}  // namespace ART_ROWEX
+#endif  // ART_ROWEX_TREE_H

@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "WorkerThread.h"
-#include "Oplog.h"
-#include "Combiner.h"
-#include "pactree.h"
+
 #include <assert.h>
 #include <libpmemobj.h>
 
-WorkerThread::WorkerThread(int id, int activeNuma) {
+#include "Combiner.h"
+#include "Oplog.h"
+#include "pactree.h"
+
+WorkerThread::WorkerThread (int id, int activeNuma) {
     this->workerThreadId = id;
     this->activeNuma = activeNuma;
     this->workQueue = &g_workQueue[workerThreadId];
@@ -17,61 +19,58 @@ WorkerThread::WorkerThread(int id, int activeNuma) {
     if (id == 0) freeQueue = new std::queue<std::pair<uint64_t, void*>>;
 }
 
-bool WorkerThread::applyOperation() {
-    std::vector<OpStruct *>* oplog = workQueue->front();
+bool WorkerThread::applyOperation () {
+    std::vector<OpStruct*>* oplog = workQueue->front ();
     int numaNode = workerThreadId % activeNuma;
     SearchLayer* sl = g_perNumaSlPtr[numaNode];
-    uint8_t hash = static_cast<uint8_t>(workerThreadId / activeNuma);
+    uint8_t hash = static_cast<uint8_t> (workerThreadId / activeNuma);
     bool ret = false;
     for (auto opsPtr : *oplog) {
-        OpStruct &ops = *opsPtr;
+        OpStruct& ops = *opsPtr;
         if (ops.hash != hash) continue;
         opcount++;
-        if (ops.op == OpStruct::insert){
-            void *newNodePtr= reinterpret_cast<void*> (((unsigned long)(ops.poolId)) << 48 | (ops.newNodeOid.off));
-            sl->insert(ops.key, newNodePtr);
-	    opsPtr->op =  OpStruct::done;
-     	}
-        else if (ops.op == OpStruct::remove) {
-            sl->remove(ops.key, ops.oldNodePtr);
-	    opsPtr->op =  OpStruct::done;
-    	    flushToNVM((char*)&ops,sizeof(OpStruct));
+        if (ops.op == OpStruct::insert) {
+            void* newNodePtr = reinterpret_cast<void*> (((unsigned long)(ops.poolId)) << 48 |
+                                                        (ops.newNodeOid.off));
+            sl->insert (ops.key, newNodePtr);
+            opsPtr->op = OpStruct::done;
+        } else if (ops.op == OpStruct::remove) {
+            sl->remove (ops.key, ops.oldNodePtr);
+            opsPtr->op = OpStruct::done;
+            flushToNVM ((char*)&ops, sizeof (OpStruct));
             if (workerThreadId == 0) {
-                std::pair<uint64_t, void *> removePair;
+                std::pair<uint64_t, void*> removePair;
                 removePair.first = logDoneCount;
                 removePair.second = ops.oldNodePtr;
-                freeQueue->push(removePair);
+                freeQueue->push (removePair);
                 ret = true;
             }
-        }
-        else{
-            if(ops.op == OpStruct::done){
-                printf("done? %p\n",opsPtr);
+        } else {
+            if (ops.op == OpStruct::done) {
+                printf ("done? %p\n", opsPtr);
             }
-            exit(1);
+            exit (1);
         }
-        flushToNVM((char*)opsPtr,sizeof(OpStruct));
-        smp_wmb();
+        flushToNVM ((char*)opsPtr, sizeof (OpStruct));
+        smp_wmb ();
     }
-    workQueue->pop();
+    workQueue->pop ();
     logDoneCount++;
     return ret;
 }
 
-bool WorkerThread::isWorkQueueEmpty() {
-    return !workQueue->read_available();
-}
+bool WorkerThread::isWorkQueueEmpty () { return !workQueue->read_available (); }
 
-void WorkerThread::freeListNodes(uint64_t removeCount) {
-    assert(workerThreadId == 0 && freeQueue != NULL);
-    if (freeQueue->empty()) return;
-    while (!freeQueue->empty()) {
-        std::pair<uint64_t, void*> removePair = freeQueue->front();
+void WorkerThread::freeListNodes (uint64_t removeCount) {
+    assert (workerThreadId == 0 && freeQueue != NULL);
+    if (freeQueue->empty ()) return;
+    while (!freeQueue->empty ()) {
+        std::pair<uint64_t, void*> removePair = freeQueue->front ();
         if (removePair.first < removeCount) {
-            PMEMoid ptr = pmemobj_oid(removePair.second);
-            pmemobj_free(&ptr);
-            freeQueue->pop();
-        }
-        else break;
+            PMEMoid ptr = pmemobj_oid (removePair.second);
+            pmemobj_free (&ptr);
+            freeQueue->pop ();
+        } else
+            break;
     }
 }
