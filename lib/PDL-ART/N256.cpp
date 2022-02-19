@@ -99,6 +99,9 @@ N* N256::getAnyChild () const {
     N* anyChild = nullptr;
     for (uint64_t i = 0; i < 256; ++i) {
         pptr<N> child = children[i].load ();
+        while (child.isDirty ()) {  // DL
+            child = children[i].load ();
+        }
         N* rawChild = child.getVaddr ();
         if (rawChild != nullptr) {
             if (N::isLeaf (rawChild)) {
@@ -115,6 +118,9 @@ N* N256::getAnyChildReverse () const {
     N* anyChild = nullptr;
     for (int i = 255; i >= 0; --i) {
         pptr<N> child = children[i].load ();
+        while (child.isDirty ()) {  // DL
+            child = children[i].load ();
+        }
         N* rawChild = child.getVaddr ();
         if (rawChild != nullptr) {
             if (N::isLeaf (rawChild)) {

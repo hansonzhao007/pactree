@@ -6,11 +6,13 @@
 #define ART_ROWEX_N_H
 //#define ART_NOREADLOCK
 //#define ART_NOWRITELOCK
+#include <immintrin.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <atomic>
 
+#include "../logger.h"
 #include "Epoche.h"
 #include "Key.h"
 #include "common.h"

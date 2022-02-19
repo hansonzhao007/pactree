@@ -17,6 +17,13 @@ else()
     message(STATUS "Use clflush instaed of clwb")
 endif()
 
+include_directories(
+  "/usr/include"
+  "/usr/local/include"
+  "${PROJECT_SOURCE_DIR}"
+  "${PROJECT_SOURCE_DIR}/lib"
+)
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "-pthread -Wall -Wextra -march=native -mavx512bw")
 

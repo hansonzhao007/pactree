@@ -5,13 +5,14 @@
 
 #include <iostream>
 
+#include "logger.h"
 #include "ordo_clock.h"
 #include "pptr.h"
 
 std::set<Oplog*> g_perThreadLog;
 boost::lockfree::spsc_queue<std::vector<OpStruct*>*, boost::lockfree::capacity<10000>>
     g_workQueue[MAX_NUMA * WORKER_THREAD_PER_NUMA];
-thread_local Oplog* Oplog::perThreadLog;
+thread_local Oplog* Oplog::perThreadLog{nullptr};
 std::atomic<int> numSplits;
 int combinerSplits = 0;
 std::atomic<unsigned long> curQ;
@@ -21,10 +22,10 @@ void Oplog::enq (OpStruct* ops) {
 #ifdef SYNC
     unsigned long qnum = 0;
 #else
-    unsigned long qnum = curQ % 2;
+    unsigned long qnum = curQ.load (std::memory_order_relaxed) % 2;
     while (!qLock[qnum].try_lock ()) {
         std::atomic_thread_fence (std::memory_order_acq_rel);
-        qnum = curQ % 2;
+        qnum = curQ.load (std::memory_order_relaxed) % 2;
     }
 #endif
     op_[qnum].push_back (ops);
@@ -65,6 +66,7 @@ Oplog* Oplog::getOpLog () {
     Oplog* perThreadLog = Oplog::getPerThreadInstance ();
     if (!g_perThreadLog.count (perThreadLog)) {
         perThreadLog = new Oplog;
+        DEBUG ("Create Oplog 0x%lx for thread: %lu", perThreadLog, std::this_thread::get_id ());
         g_perThreadLog.insert (perThreadLog);
         setPerThreadInstance (perThreadLog);
     }
@@ -82,6 +84,8 @@ void Oplog::enqPerThreadLog (OpStruct* ops) {
 
 void Oplog::writeOpLog (OpStruct* oplog, OpStruct::Operation op, Key_t key, void* oldNodeRawPtr,
                         uint16_t poolId, Key_t newKey, Val_t newVal) {
+    DEBUG ("Oplog. op: %u, key: %lu, poolId: %u, newKey: %lu, newVal: %lu ", op, key, poolId,
+           newKey, newVal);
     oplog->op = op;
     oplog->key = key;
     oplog->oldNodePtr = oldNodeRawPtr;  // should be persistent ptr

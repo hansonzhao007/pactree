@@ -13,6 +13,10 @@
 #include "numa.h"
 #include "pactreeImpl.h"
 
+constexpr uint64_t kSLSize = 10UL * 1024UL * 1024UL * 1024UL;
+constexpr uint64_t kDLSize = 100UL * 1024UL * 1024UL * 1024UL;
+constexpr uint64_t kLOGSize = 100UL * 1024UL * 1024UL * 1024UL;
+
 #ifdef PACTREE_ENABLE_STATS
 #define acc_sl_time(x) (curThreadData->sltime += x)
 #define acc_dl_time(x) (curThreadData->dltime += x)
@@ -185,34 +189,33 @@ void pactreeImpl::createCombinerThread () {
 }
 
 pactreeImpl* initPT (int numa) {
-    const char* path = "/mnt/pmem0/dl";
-    size_t sz = 1UL * 1024UL * 1024UL * 1024UL;  // 10GB
+    const char* dl_path = "/mnt/pmem0/dl";
+    const char* sl_path = "/mnt/pmem0/sl";
+    const char* log_path = "/mnt/pmem0/log";
+
     int isCreated = 0;
     int isCreated2 = 0;
     root_obj* root = nullptr;
     root_obj* sl_root = nullptr;
 
-    const char* sl_path = "/mnt/pmem0/sl";
-    size_t sl_size = 1UL * 1024UL * 1024UL * 1024UL;
-
-    PMem::bind (0, sl_path, sl_size, (void**)&sl_root, &isCreated);
+    PMem::bind (0, sl_path, kSLSize, (void**)&sl_root, &isCreated);
     if (isCreated == 0) {
         printf ("Reading Search layer from an existing pactree.\n");
     }
-    const char* log_path = "/mnt/pmem0/log";
-    PMem::bindLog (0, log_path, sz);
 
-    PMem::bind (1, path, sz, (void**)&root, &isCreated2);
+    PMem::bindLog (0, log_path, kLOGSize);
+
+    PMem::bind (1, dl_path, kDLSize, (void**)&root, &isCreated2);
 
 #ifdef MULTIPOOL
-    const char* path2 = "/mnt/pmem1/dl";
+    const char* dl_path2 = "/mnt/pmem1/dl";
     const char* sl_path2 = "/mnt/pmem1/sl";
     const char* log_path2 = "/mnt/pmem1/log";
     root_obj* root2 = nullptr;
     root_obj* sl_root2 = nullptr;
-    PMem::bind (3, sl_path2, sl_size, (void**)&sl_root2, &isCreated);
-    PMem::bind (4, path2, sz, (void**)&root2, &isCreated);
-    PMem::bindLog (1, log_path2, sz);
+    PMem::bind (3, sl_path2, kSLSize, (void**)&sl_root2, &isCreated);
+    PMem::bind (4, dl_path2, kDLSize, (void**)&root2, &isCreated);
+    PMem::bindLog (1, log_path2, kLOGSize);
 #endif
     if (isCreated2 == 0) {
         pactreeImpl* pt = (pactreeImpl*)pmemobj_direct (root->ptr[0]);

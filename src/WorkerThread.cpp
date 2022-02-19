@@ -8,6 +8,7 @@
 
 #include "Combiner.h"
 #include "Oplog.h"
+#include "logger.h"
 #include "pactree.h"
 
 WorkerThread::WorkerThread (int id, int activeNuma) {
@@ -25,10 +26,13 @@ bool WorkerThread::applyOperation () {
     SearchLayer* sl = g_perNumaSlPtr[numaNode];
     uint8_t hash = static_cast<uint8_t> (workerThreadId / activeNuma);
     bool ret = false;
+    int i = 0;
     for (auto opsPtr : *oplog) {
         OpStruct& ops = *opsPtr;
         if (ops.hash != hash) continue;
         opcount++;
+        DEBUG ("Apply log 0x%lx. op (%3d): %u, key: %lu, poolId: %u, newKey: %lu, newVal: %lu ",
+               oplog, i++, ops.op, ops.key, ops.poolId, ops.newKey, ops.newVal);
         if (ops.op == OpStruct::insert) {
             void* newNodePtr = reinterpret_cast<void*> (((unsigned long)(ops.poolId)) << 48 |
                                                         (ops.newNodeOid.off));
@@ -47,8 +51,15 @@ bool WorkerThread::applyOperation () {
             }
         } else {
             if (ops.op == OpStruct::done) {
-                printf ("done? %p\n", opsPtr);
+                ERROR (
+                    "Apply a done log 0x%lx. op: %u, key: %lu, poolId: %u, newKey: %lu, "
+                    "newVal: %lu ",
+                    oplog, ops.op, ops.key, ops.poolId, ops.newKey, ops.newVal);
+                assert (false);
+                perror ("Apply done oplog");
+                exit (1);
             }
+            perror ("What the heck?");
             exit (1);
         }
         flushToNVM ((char*)opsPtr, sizeof (OpStruct));

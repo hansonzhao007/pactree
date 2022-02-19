@@ -10,7 +10,7 @@
 #include "pactree.h"
 #include "threadData.h"
 
-thread_local int logCnt = 0;
+std::atomic<size_t> logCnt{0};
 thread_local int coreId = -1;
 extern thread_local ThreadData* curThreadData;
 std::mutex mtx[112];
@@ -208,12 +208,9 @@ pptr<ListNode> ListNode ::split (Key_t key, Val_t val, uint8_t keyHash, int thre
     if (core != coreId) coreId = core;
 
     mtx[core].lock ();
-    int numLogsPerThread = 1000;
-    int logIdx = numLogsPerThread * (core) + logCnt;
-    logCnt++;
-    if (logCnt == numLogsPerThread) {
-        logCnt = 0;
-    }
+
+    // TODO: fix this logIdx for multithreads
+    int logIdx = logCnt.fetch_add (1, std::memory_order_relaxed);
     OpStruct* oplog;
 
 #ifdef MULTIPOOL
@@ -296,6 +293,8 @@ pptr<ListNode> ListNode ::split (Key_t key, Val_t val, uint8_t keyHash, int thre
 
     ListNode* nextNode = newNodePtr->getNext ();
     nextNode->setPrev (newNodePtr);
+
+    // push the SMO to background queue
     Oplog::enqPerThreadLog (oplog);
 
     mtx[core].unlock ();

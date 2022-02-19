@@ -113,6 +113,9 @@ N* N48::getAnyChild () const {
     N* anyChild = nullptr;
     for (unsigned i = 0; i < 48; i++) {
         pptr<N> child = children[i].load ();
+        while (child.isDirty ()) {  // DL
+            child = children[i].load ();
+        }
         N* rawChild = child.getVaddr ();
         if (rawChild != nullptr) {
             if (N::isLeaf (rawChild)) {

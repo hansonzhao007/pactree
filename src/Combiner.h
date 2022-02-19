@@ -9,6 +9,7 @@
 
 #include "Oplog.h"
 #include "WorkerThread.h"
+#include "logger.h"
 
 class CombinerThread {
 private:
@@ -18,9 +19,10 @@ private:
 public:
     CombinerThread () { doneCountCombiner = 0; }
     std::vector<OpStruct*>* combineLogs () {
-        std::atomic_fetch_add (&curQ, 1ul);
+        curQ.fetch_add (1, std::memory_order_acq_rel);
         int qnum = static_cast<int> ((curQ - 1) % 2);
         auto mergedLog = new std::vector<OpStruct*>;
+
         for (auto& i : g_perThreadLog) {
             Oplog& log = *i;
             log.lock (qnum);
@@ -32,11 +34,13 @@ public:
         }
         std::sort (mergedLog->begin (), mergedLog->end ());
         combinerSplits += mergedLog->size ();
+        DEBUG ("Create combine log 0x%lx (%lu)", mergedLog, mergedLog->size ());
         if (!mergedLog->empty ()) {
             logQueue.push (make_pair (doneCountCombiner, mergedLog));
             doneCountCombiner++;
             return mergedLog;
         } else {
+            DEBUG ("Delete combine log 0x%lx", mergedLog);
             delete mergedLog;
             return nullptr;
         }
