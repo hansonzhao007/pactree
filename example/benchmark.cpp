@@ -37,7 +37,7 @@ DEFINE_uint32 (batch, 1000000, "report batch");
 DEFINE_uint32 (readtime, 0, "if 0, then we read all keys");
 DEFINE_uint32 (thread, 1, "");
 DEFINE_uint64 (report_interval, 0, "Report interval in seconds");
-DEFINE_uint64 (stats_interval, 10000000, "Report interval in ops");
+DEFINE_uint64 (stats_interval, 20000000, "Report interval in ops");
 DEFINE_uint64 (value_size, 8, "The value size");
 DEFINE_uint64 (num, 1 * 1000000LU, "Number of total record");
 DEFINE_uint64 (read, 1 * 1000000, "Number of read operations");
@@ -393,6 +393,10 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize ();
                 method = &Benchmark::DoRead;
+            } else if (name == "readall") {
+                fresh_db = false;
+                key_trace_->Randomize ();
+                method = &Benchmark::DoReadAll;
             } else if (name == "readnon") {
                 fresh_db = false;
                 key_trace_->Randomize ();
@@ -442,6 +446,37 @@ public:
         }
         size_t start_offset = random () % trace_size_;
         auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
+        size_t not_find = 0;
+        uint64_t data_offset;
+        Duration duration (FLAGS_readtime, reads_);
+        thread->stats.Start ();
+        while (!duration.Done (batch) && key_iterator.Valid ()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid (); j++) {
+                size_t ikey = key_iterator.Next ();
+                auto ret = pt->lookup (ikey);
+                if (ret != ikey) {
+                    not_find++;
+                }
+            }
+            thread->stats.FinishedBatchOp (j);
+        }
+        char buf[100];
+        snprintf (buf, sizeof (buf), "(num: %lu, not find: %lu)", reads_, not_find);
+        thread->stats.AddMessage (buf);
+    }
+
+    void DoReadAll (ThreadState* thread) {
+        pt->registerThread ();
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror ("DoRead lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between (start_offset, start_offset + interval);
+
         size_t not_find = 0;
         uint64_t data_offset;
         Duration duration (FLAGS_readtime, reads_);
