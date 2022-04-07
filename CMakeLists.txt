@@ -22,6 +22,8 @@ include_directories(
   "/usr/local/include"
   "${PROJECT_SOURCE_DIR}"
   "${PROJECT_SOURCE_DIR}/lib"
+  "../test"
+  "../src"
 )
 
 set(CMAKE_CXX_STANDARD 14)
