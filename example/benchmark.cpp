@@ -40,6 +40,7 @@ DEFINE_uint64 (report_interval, 0, "Report interval in seconds");
 DEFINE_uint64 (stats_interval, 20000000, "Report interval in ops");
 DEFINE_uint64 (value_size, 8, "The value size");
 DEFINE_uint64 (num, 1 * 1000000LU, "Number of total record");
+DEFINE_uint64 (scan_num, 50, "");
 DEFINE_uint64 (read, 1 * 1000000, "Number of read operations");
 DEFINE_uint64 (write, 1 * 1000000, "Number of read operations");
 DEFINE_bool (hist, false, "");
@@ -434,6 +435,37 @@ public:
             IPMWatcher watcher (name);
             if (method != nullptr) RunBenchmark (thread, name, method, print_hist);
         }
+    }
+
+    void DoScan (ThreadState* thread) {
+        pt->registerThread ();
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror ("DoScan lack key_trace_ initialization.");
+            return;
+        }
+        size_t start_offset = random () % trace_size_;
+        auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
+        size_t scanless = 0;
+        uint64_t data_offset;
+        Duration duration (FLAGS_readtime, reads_);
+        std::vector<Val_t> readbuffer;
+        thread->stats.Start ();
+        while (!duration.Done (batch) && key_iterator.Valid ()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid (); j++) {
+                size_t ikey = key_iterator.Next ();
+                readbuffer.clear ();
+                size_t scanned = pt->scan (ikey, FLAGS_scan_num, readbuffer);
+                if (scanned != FLAGS_scan_num) {
+                    scanless++;
+                }
+            }
+            thread->stats.FinishedBatchOp (j);
+        }
+        char buf[100];
+        snprintf (buf, sizeof (buf), "(num: %lu, scanless: %lu)", reads_, scanless);
+        thread->stats.AddMessage (buf);
     }
 
     void DoRead (ThreadState* thread) {
