@@ -389,6 +389,14 @@ public:
                 fresh_db = false;
                 key_trace_->Randomize ();
                 method = &Benchmark::DoOverWrite;
+            } else if (name == "scan") {
+                fresh_db = false;
+                key_trace_->Randomize ();
+                method = &Benchmark::DoScan;
+            } else if (name == "status") {
+                fresh_db = false;
+                key_trace_->Randomize ();
+                method = &Benchmark::Status;
             } else if (name == "readrandom") {
                 fresh_db = false;
                 key_trace_->Randomize ();
@@ -467,6 +475,8 @@ public:
         snprintf (buf, sizeof (buf), "(num: %lu, scanless: %lu)", reads_, scanless);
         thread->stats.AddMessage (buf);
     }
+
+    void Status (ThreadState* thread) {}
 
     void DoRead (ThreadState* thread) {
         pt->registerThread ();
