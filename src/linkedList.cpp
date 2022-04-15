@@ -217,18 +217,22 @@ restart:
         }
         break;
     }
+    assert (cur);
     if (!cur->writeLock (genId)) {
         if (head->getPrev () != nullptr) head = head->getPrev ();
+        assert (head);
         goto restart;
     }
     if (cur->getDeleted ()) {
         if (head->getPrev () != nullptr) head = head->getPrev ();
         cur->writeUnlock ();
+        assert (head);
         goto restart;
     }
     if (!cur->checkRange (key)) {
         if (head->getPrev () != nullptr) head = head->getPrev ();
         cur->writeUnlock ();
+        assert (head);
         goto restart;
     }
 

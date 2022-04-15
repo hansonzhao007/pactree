@@ -397,7 +397,7 @@ bool pactreeImpl::remove (Key_t& key) {
     curThreadData->read_lock (clock);
 
     ListNode* jumpNode = getJumpNode (key);
-
+    assert (jumpNode);
     bool ret = dl.remove (key, jumpNode);
     curThreadData->read_unlock ();
     return ret;

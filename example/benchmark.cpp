@@ -45,6 +45,7 @@ DEFINE_uint64 (read, 1 * 1000000, "Number of read operations");
 DEFINE_uint64 (write, 1 * 1000000, "Number of read operations");
 DEFINE_bool (hist, false, "");
 DEFINE_string (benchmarks, "load,readrandom", "");
+DEFINE_bool (is_seq_trace, false, "");
 
 namespace {
 
@@ -353,7 +354,7 @@ public:
     void Run () {
         trace_size_ = FLAGS_num;
         printf ("key trace size: %lu\n", trace_size_);
-        key_trace_ = new RandomKeyTrace (trace_size_);
+        key_trace_ = new RandomKeyTrace (trace_size_, FLAGS_is_seq_trace);
         if (reads_ == 0) {
             reads_ = key_trace_->count_;
         }
@@ -377,8 +378,11 @@ public:
             if (name == "load") {
                 fresh_db = true;
                 method = &Benchmark::DoWrite;
-            }
-            if (name == "loadlat") {
+            } else if (name == "delete") {
+                fresh_db = false;
+                key_trace_->Randomize ();
+                method = &Benchmark::DoDelete;
+            } else if (name == "loadlat") {
                 fresh_db = true;
                 print_hist = true;
                 method = &Benchmark::DoWriteLat;
@@ -488,7 +492,7 @@ public:
         size_t start_offset = random () % trace_size_;
         auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
+
         Duration duration (FLAGS_readtime, reads_);
         thread->stats.Start ();
         while (!duration.Done (batch) && key_iterator.Valid ()) {
@@ -519,7 +523,7 @@ public:
         auto key_iterator = key_trace_->iterate_between (start_offset, start_offset + interval);
 
         size_t not_find = 0;
-        uint64_t data_offset;
+
         Duration duration (FLAGS_readtime, interval);
         thread->stats.Start ();
         while (!duration.Done (batch) && key_iterator.Valid ()) {
@@ -548,7 +552,7 @@ public:
         size_t start_offset = random () % trace_size_;
         auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
+
         Duration duration (FLAGS_readtime, reads_);
         thread->stats.Start ();
         while (!duration.Done (batch) && key_iterator.Valid ()) {
@@ -576,7 +580,7 @@ public:
         size_t start_offset = random () % trace_size_;
         auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
+
         Duration duration (FLAGS_readtime, reads_);
         thread->stats.Start ();
         while (!duration.Done (1) && key_iterator.Valid ()) {
@@ -605,7 +609,7 @@ public:
         size_t start_offset = random () % trace_size_;
         auto key_iterator = key_trace_->trace_at (start_offset, trace_size_);
         size_t not_find = 0;
-        uint64_t data_offset;
+
         Duration duration (FLAGS_readtime, reads_);
         thread->stats.Start ();
         while (!duration.Done (1) && key_iterator.Valid ()) {
@@ -623,6 +627,35 @@ public:
         char buf[100];
         snprintf (buf, sizeof (buf), "(num: %lu, not find: %lu)", reads_, not_find);
         thread->stats.AddMessage (buf);
+    }
+
+    void DoDelete (ThreadState* thread) {
+        pt->registerThread ();
+        uint64_t batch = FLAGS_batch;
+        if (key_trace_ == nullptr) {
+            perror ("DoDelete lack key_trace_ initialization.");
+            return;
+        }
+        size_t interval = num_ / FLAGS_thread;
+        size_t start_offset = thread->tid * interval;
+        auto key_iterator = key_trace_->iterate_between (start_offset, start_offset + interval);
+
+        thread->stats.Start ();
+        size_t deleted = 0;
+        while (key_iterator.Valid ()) {
+            uint64_t j = 0;
+            for (; j < batch && key_iterator.Valid (); j++) {
+                size_t ikey = key_iterator.Next ();
+                bool res = pt->remove (ikey);
+                if (res) deleted++;
+            }
+            thread->stats.FinishedBatchOp (j);
+        }
+        char buf[100];
+        snprintf (buf, sizeof (buf), "(num: %lu, deleted: %lu)", interval, deleted);
+        INFO ("(num: %lu, deleted: %lu)", interval, deleted);
+        thread->stats.AddMessage (buf);
+        return;
     }
 
     void DoWrite (ThreadState* thread) {
@@ -647,13 +680,13 @@ public:
             }
             thread->stats.FinishedBatchOp (j);
         }
-    write_end:
+
         return;
     }
 
     void DoWriteLat (ThreadState* thread) {
         pt->registerThread ();
-        uint64_t batch = FLAGS_batch;
+
         if (key_trace_ == nullptr) {
             perror ("DoWriteLat lack key_trace_ initialization.");
             return;
@@ -672,7 +705,7 @@ public:
             auto time_duration = NowNanos () - time_start;
             thread->stats.hist_.Add (time_duration);
         }
-    write_end:
+
         return;
     }
 
@@ -699,7 +732,7 @@ public:
             }
             thread->stats.FinishedBatchOp (j);
         }
-    write_end:
+
         return;
     }
 
@@ -725,7 +758,7 @@ public:
             }
             thread->stats.FinishedBatchOp (j);
         }
-    write_end:
+
         return;
     }
 
@@ -753,7 +786,7 @@ public:
                     pt->insert (key, key);
                     insert++;
                 } else {
-                    auto ret = pt->lookup (key);
+                    pt->lookup (key);
                     find++;
                 }
             }
@@ -789,7 +822,7 @@ public:
                     pt->insert (key, key);
                     insert++;
                 } else {
-                    auto ret = pt->lookup (key);
+                    pt->lookup (key);
                     find++;
                 }
             }
